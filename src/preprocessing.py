@@ -6,24 +6,28 @@ Limpia, codifica y prepara los datos para entrenar el modelo XGBoost.
 import os
 import sys
 import warnings
+
 warnings.filterwarnings("ignore")
 
-import numpy as np
 import pandas as pd
+from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
-from imblearn.over_sampling import SMOTE
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import (
-    DATA_FILE, RANDOM_STATE, TEST_SIZE,
-    HIGH_AMOUNT_THRESHOLD, NIGHT_HOURS, RISK_COUNTRIES
+    DATA_FILE,
+    HIGH_AMOUNT_THRESHOLD,
+    NIGHT_HOURS,
+    RANDOM_STATE,
+    RISK_COUNTRIES,
+    TEST_SIZE,
 )
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Feature Engineering
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -39,13 +43,11 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # 3. Z-score del monto (qué tan alejado está de la media)
     mean_amount = df["amount"].mean()
-    std_amount  = df["amount"].std()
+    std_amount = df["amount"].std()
     df["amount_zscore"] = ((df["amount"] - mean_amount) / std_amount).round(4)
 
     # 4. ¿Es un país de alto riesgo?
-    df["is_risk_country"] = df["country"].apply(
-        lambda c: 1 if c in RISK_COUNTRIES else 0
-    )
+    df["is_risk_country"] = df["country"].apply(lambda c: 1 if c in RISK_COUNTRIES else 0)
 
     # 5. Puntuación de riesgo combinada (heurística simple)
     df["risk_score_heuristic"] = (
@@ -62,6 +64,7 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
 # ──────────────────────────────────────────────────────────────────────────────
 # Codificación de Variables Categóricas
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def encode_categoricals(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     """
@@ -113,7 +116,7 @@ def load_and_preprocess(
     df = pd.read_csv(data_path, index_col="transaction_id")
 
     print(f"   Filas cargadas: {len(df):,}")
-    print(f"   Fraudes       : {df['is_fraud'].sum():,} ({df['is_fraud'].mean()*100:.2f}%)")
+    print(f"   Fraudes       : {df['is_fraud'].sum():,} ({df['is_fraud'].mean() * 100:.2f}%)")
 
     # Eliminar duplicados y nulos
     df.drop_duplicates(inplace=True)
@@ -134,7 +137,8 @@ def load_and_preprocess(
     # Split estratificado
     print("✂️  Dividiendo en train/test...")
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y,
+        X,
+        y,
         test_size=TEST_SIZE,
         random_state=RANDOM_STATE,
         stratify=y,

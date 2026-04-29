@@ -6,32 +6,32 @@ Entrena, evalúa y guarda el modelo de detección de fraude.
 import os
 import sys
 import warnings
+
 warnings.filterwarnings("ignore")
 
-import numpy as np
 import joblib
 import matplotlib.pyplot as plt
 import seaborn as sns
-from xgboost import XGBClassifier
 from sklearn.metrics import (
+    accuracy_score,
     classification_report,
     confusion_matrix,
-    roc_auc_score,
-    roc_curve,
     f1_score,
     precision_score,
     recall_score,
-    accuracy_score,
+    roc_auc_score,
+    roc_curve,
 )
+from xgboost import XGBClassifier
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import MODEL_FILE, ENCODERS_FILE, MODEL_PARAMS, RANDOM_STATE, MODELS_DIR
-from src.preprocessing import load_and_preprocess, FEATURE_COLUMNS
-
+from config import ENCODERS_FILE, MODEL_FILE, MODEL_PARAMS, MODELS_DIR
+from src.preprocessing import FEATURE_COLUMNS, load_and_preprocess
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Entrenamiento
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def train_model():
     print("=" * 60)
@@ -51,13 +51,13 @@ def train_model():
     print("🌲 Entrenando XGBoost...")
     model = XGBClassifier(
         **MODEL_PARAMS,
-        scale_pos_weight=1,   # SMOTE ya balanceó las clases
+        scale_pos_weight=1,  # SMOTE ya balanceó las clases
         use_label_encoder=False,
     )
     model.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=False)
 
     # 4. Predicciones
-    y_pred      = model.predict(X_test)
+    y_pred = model.predict(X_test)
     y_pred_prob = model.predict_proba(X_test)[:, 1]
 
     # 5. Métricas
@@ -83,7 +83,7 @@ def train_model():
 
     # 7. Guardar modelo y encoders
     os.makedirs(MODELS_DIR, exist_ok=True)
-    joblib.dump(model,    MODEL_FILE)
+    joblib.dump(model, MODEL_FILE)
     joblib.dump(encoders, ENCODERS_FILE)
     print(f"\n✅ Modelo guardado en   : {MODEL_FILE}")
     print(f"✅ Encoders guardados en: {ENCODERS_FILE}")
@@ -98,16 +98,22 @@ def train_model():
 # Gráficos
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def _save_plots(model, y_test, y_pred, y_pred_prob):
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
     fig.suptitle("FraudSense — Evaluación del Modelo", fontsize=14, fontweight="bold")
 
     # Confusion Matrix
     cm = confusion_matrix(y_test, y_pred)
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
-                xticklabels=["Legítima", "Fraude"],
-                yticklabels=["Legítima", "Fraude"],
-                ax=axes[0])
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt="d",
+        cmap="Blues",
+        xticklabels=["Legítima", "Fraude"],
+        yticklabels=["Legítima", "Fraude"],
+        ax=axes[0],
+    )
     axes[0].set_title("Confusion Matrix")
     axes[0].set_ylabel("Real")
     axes[0].set_xlabel("Predicción")
