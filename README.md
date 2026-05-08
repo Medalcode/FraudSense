@@ -137,6 +137,7 @@ python src/train_model.py
 ### 5. Iniciar la API
 
 ```bash
+export FRAUDSENSE_API_KEY="cambia-esto-por-una-clave-segura"
 uvicorn src.api:app --reload
 # Documentación → http://localhost:8000/docs
 ```
@@ -156,6 +157,7 @@ streamlit run dashboard/app.py
 ```http
 POST /evaluar_transaccion
 Content-Type: application/json
+X-API-Key: <tu_api_key>
 
 {
   "amount": 950000,
