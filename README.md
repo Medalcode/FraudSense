@@ -8,6 +8,7 @@
 ![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)
 [![CI](https://github.com/Medalcode/FraudSense/actions/workflows/ci.yml/badge.svg)](https://github.com/Medalcode/FraudSense/actions/workflows/ci.yml)
+[![Demo](https://img.shields.io/badge/Demo-Vercel-000000?style=for-the-badge&logo=vercel)](https://fraudsense-api.vercel.app)
 ![Status](https://img.shields.io/badge/Estado-En%20Desarrollo-brightgreen?style=for-the-badge)
 
 **Sistema Inteligente de Detección de Fraude en Transacciones Digitales usando Machine Learning**
