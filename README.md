@@ -7,6 +7,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-REST%20API-009688?style=for-the-badge&logo=fastapi&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)
+[![CI](https://github.com/Medalcode/FraudSense/actions/workflows/ci.yml/badge.svg)](https://github.com/Medalcode/FraudSense/actions/workflows/ci.yml)
 ![Status](https://img.shields.io/badge/Estado-En%20Desarrollo-brightgreen?style=for-the-badge)
 
 **Sistema Inteligente de Detección de Fraude en Transacciones Digitales usando Machine Learning**
