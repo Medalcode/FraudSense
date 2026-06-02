@@ -92,6 +92,15 @@ def main():
 
     df.to_csv(DATA_FILE, index=True)
 
+    # ── Guardar en Base de Datos ───────────────────────────────────────────
+    print("\n🗄️ Guardando en base de datos SQLite...")
+    from src.db import init_db, get_connection
+    init_db()
+    with get_connection() as conn:
+        # Vaciar tabla antes de insertar si queremos empezar fresco
+        conn.execute("DELETE FROM transactions")
+        df.to_sql("transactions", conn, if_exists="append", index=False)
+
     # ── Estadísticas ───────────────────────────────────────────────────────
     total   = len(df)
     fraud_n = df["is_fraud"].sum()

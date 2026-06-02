@@ -13,6 +13,10 @@ import joblib
 import matplotlib.pyplot as plt
 import seaborn as sns
 from xgboost import XGBClassifier
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from imblearn.pipeline import Pipeline
+from imblearn.over_sampling import SMOTE
 from sklearn.metrics import (
     classification_report,
     confusion_matrix,
@@ -25,8 +29,8 @@ from sklearn.metrics import (
 )
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import MODEL_FILE, ENCODERS_FILE, MODEL_PARAMS, RANDOM_STATE, MODELS_DIR
-from src.preprocessing import load_and_preprocess, FEATURE_COLUMNS
+from config import PIPELINE_FILE, MODEL_PARAMS, RANDOM_STATE, MODELS_DIR
+from src.preprocessing import load_and_preprocess, FEATURE_COLUMNS, NUMERICAL_COLUMNS, CATEGORICAL_COLUMNS
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -35,32 +39,42 @@ from src.preprocessing import load_and_preprocess, FEATURE_COLUMNS
 
 def train_model():
     print("=" * 60)
-    print("  FraudSense — Entrenamiento del Modelo XGBoost")
+    print("  FraudSense — Entrenamiento del Modelo XGBoost (Pipeline)")
     print("=" * 60)
 
     # 1. Preprocesar datos
-    X_train, X_test, y_train, y_test, encoders = load_and_preprocess(apply_smote=True)
+    X_train, X_test, y_train, y_test = load_and_preprocess()
 
-    # 2. Calcular peso para clase positiva (fraude) — doble protección junto a SMOTE
-    n_neg = (y_train == 0).sum()
-    n_pos = (y_train == 1).sum()
-    scale = round(n_neg / n_pos, 2)
-    print(f"⚖️  scale_pos_weight: {scale} (clases balanceadas por SMOTE)\n")
-
-    # 3. Construir y entrenar modelo
-    print("🌲 Entrenando XGBoost...")
-    model = XGBClassifier(
-        **MODEL_PARAMS,
-        scale_pos_weight=1,   # SMOTE ya balanceó las clases
-        use_label_encoder=False,
+    # 2. Configurar ColumnTransformer
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("num", StandardScaler(), NUMERICAL_COLUMNS),
+            ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False), CATEGORICAL_COLUMNS),
+        ],
+        remainder="passthrough"
     )
-    model.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=False)
 
-    # 4. Predicciones
-    y_pred      = model.predict(X_test)
-    y_pred_prob = model.predict_proba(X_test)[:, 1]
+    # 3. Construir Pipeline
+    print("🌲 Construyendo Pipeline (Preprocesamiento -> SMOTE -> XGBoost)...")
+    pipeline = Pipeline(steps=[
+        ("preprocessor", preprocessor),
+        ("smote", SMOTE(random_state=RANDOM_STATE, k_neighbors=5)),
+        ("classifier", XGBClassifier(
+            **MODEL_PARAMS,
+            scale_pos_weight=1,
+            use_label_encoder=False,
+        ))
+    ])
 
-    # 5. Métricas
+    # 4. Entrenar
+    print("⚙️ Entrenando Pipeline...")
+    pipeline.fit(X_train, y_train)
+
+    # 5. Predicciones
+    y_pred      = pipeline.predict(X_test)
+    y_pred_prob = pipeline.predict_proba(X_test)[:, 1]
+
+    # 6. Métricas
     print("\n" + "─" * 60)
     print("  RESULTADOS DEL MODELO")
     print("─" * 60)
@@ -73,32 +87,23 @@ def train_model():
     print("\n📊 Reporte de Clasificación:")
     print(classification_report(y_test, y_pred, target_names=["Legítima", "Fraude"]))
 
-    # 6. Importancia de variables
-    print("🔍 Top 5 Features más Importantes:")
-    importances = model.feature_importances_
-    feature_imp = sorted(zip(FEATURE_COLUMNS, importances), key=lambda x: x[1], reverse=True)
-    for feat, imp in feature_imp[:5]:
-        bar = "█" * int(imp * 50)
-        print(f"   {feat:<25} {bar} {imp:.4f}")
-
-    # 7. Guardar modelo y encoders
+    # 7. Guardar Pipeline Completo
     os.makedirs(MODELS_DIR, exist_ok=True)
-    joblib.dump(model,    MODEL_FILE)
-    joblib.dump(encoders, ENCODERS_FILE)
-    print(f"\n✅ Modelo guardado en   : {MODEL_FILE}")
-    print(f"✅ Encoders guardados en: {ENCODERS_FILE}")
+    joblib.dump(pipeline, PIPELINE_FILE)
+    print(f"\n✅ Pipeline completo guardado en: {PIPELINE_FILE}")
 
     # 8. Guardar gráficos
-    _save_plots(model, y_test, y_pred, y_pred_prob)
+    _save_plots(pipeline, y_test, y_pred, y_pred_prob)
 
-    return model, encoders
+    return pipeline
+
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Gráficos
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _save_plots(model, y_test, y_pred, y_pred_prob):
+def _save_plots(pipeline, y_test, y_pred, y_pred_prob):
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
     fig.suptitle("FraudSense — Evaluación del Modelo", fontsize=14, fontweight="bold")
 
@@ -123,15 +128,23 @@ def _save_plots(model, y_test, y_pred, y_pred_prob):
     axes[1].legend(loc="lower right")
 
     # Feature Importance
+    model = pipeline.named_steps["classifier"]
+    preprocessor = pipeline.named_steps["preprocessor"]
+    feature_names = preprocessor.get_feature_names_out()
+    
     importances = model.feature_importances_
-    feat_series = sorted(zip(FEATURE_COLUMNS, importances), key=lambda x: x[1])
+    feat_series = sorted(zip(feature_names, importances), key=lambda x: x[1])[-10:] # Top 10
     names, vals = zip(*feat_series)
+    
+    # Clean up feature names for display
+    names = [n.split("__")[-1] for n in names]
+    
     axes[2].barh(names, vals, color="#3498db")
-    axes[2].set_title("Feature Importance")
+    axes[2].set_title("Top 10 Feature Importance")
     axes[2].set_xlabel("Importancia (F-score)")
 
     plt.tight_layout()
-    plot_path = os.path.join(os.path.dirname(MODEL_FILE), "evaluation.png")
+    plot_path = os.path.join(os.path.dirname(PIPELINE_FILE), "evaluation.png")
     plt.savefig(plot_path, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"📈 Gráficos guardados en: {plot_path}")

@@ -14,32 +14,29 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import (
-    MODEL_FILE, ENCODERS_FILE,
-    RISK_THRESHOLDS, HIGH_AMOUNT_THRESHOLD,
-    NIGHT_HOURS, RISK_COUNTRIES
+    PIPELINE_FILE,
+    RISK_THRESHOLDS,
 )
-from src.preprocessing import FEATURE_COLUMNS
+from src.preprocessing import engineer_features, FEATURE_COLUMNS
+from src.db import get_connection, init_db
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Carga del Modelo
 # ──────────────────────────────────────────────────────────────────────────────
 
-_model    = None
-_encoders = None
-
+_pipeline = None
 
 def _load_artifacts():
-    """Carga modelo y encoders (lazy-loading con caché en memoria)."""
-    global _model, _encoders
-    if _model is None:
-        if not os.path.exists(MODEL_FILE):
+    """Carga pipeline completo (lazy-loading con caché en memoria)."""
+    global _pipeline
+    if _pipeline is None:
+        if not os.path.exists(PIPELINE_FILE):
             raise FileNotFoundError(
-                f"Modelo no encontrado en: {MODEL_FILE}\n"
+                f"Modelo no encontrado en: {PIPELINE_FILE}\n"
                 "Ejecuta primero: python src/train_model.py"
             )
-        _model    = joblib.load(MODEL_FILE)
-        _encoders = joblib.load(ENCODERS_FILE)
+        _pipeline = joblib.load(PIPELINE_FILE)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -48,11 +45,9 @@ def _load_artifacts():
 
 def _preprocess_single(data: dict) -> pd.DataFrame:
     """
-    Aplica el mismo pipeline de features que en entrenamiento
-    para una sola transacción en formato diccionario.
+    Aplica feature engineering inicial a la entrada.
+    El resto de transformaciones (OneHot, Scaling) las hace el pipeline.
     """
-    _load_artifacts()
-
     amount   = float(data.get("amount", 0))
     country  = str(data.get("country", "CL")).upper()
     hour     = int(data.get("hour", 12))
@@ -61,50 +56,69 @@ def _preprocess_single(data: dict) -> pd.DataFrame:
     foreign  = int(data.get("is_foreign", 0))
     hrm      = int(data.get("high_risk_merchant", 0))
 
-    # Feature engineering (idéntico a preprocessing.py)
-    is_night      = 1 if hour in NIGHT_HOURS else 0
-    high_amount   = 1 if amount > HIGH_AMOUNT_THRESHOLD else 0
-    is_risk_ctry  = 1 if country in RISK_COUNTRIES else 0
-
-    # Encodings
-    def safe_encode(le, val):
-        if val in le.classes_:
-            return int(le.transform([val])[0])
-        return int(le.transform([le.classes_[0]])[0])
-
-    enc_country = safe_encode(_encoders["country"], country)
-    enc_device  = safe_encode(_encoders["device_type"], device)
-
-    # Z-score del monto usa estadísticas del entrenamiento
-    mean_amount = 245_000
-    std_amount  = 320_000
-    amount_z    = round((amount - mean_amount) / std_amount, 4)
-
-    risk_heuristic = (
-        fails * 0.3
-        + foreign * 0.2
-        + hrm * 0.2
-        + is_night * 0.15
-        + high_amount * 0.15
-    )
-
     row = {
         "amount":                 amount,
-        "country":                enc_country,
+        "country":                country,
         "hour":                   hour,
-        "device_type":            enc_device,
+        "device_type":            device,
         "failed_attempts":        fails,
         "is_foreign":             foreign,
         "high_risk_merchant":     hrm,
-        "is_night":               is_night,
-        "high_amount":            high_amount,
-        "amount_zscore":          amount_z,
-        "is_risk_country":        is_risk_ctry,
-        "risk_score_heuristic":   risk_heuristic,
     }
 
-    return pd.DataFrame([row], columns=FEATURE_COLUMNS)
+    df = pd.DataFrame([row])
+    # Aplicar las mismas reglas que en entrenamiento
+    df = engineer_features(df)
+    
+    # Asegurar que z-score se calcule bien si el batch size es 1. 
+    # Idealmente en production se usaría un StandardScaler para esto también, 
+    # pero engineer_features usa la std/mean de sí mismo.
+    # Si df tiene len 1, df["amount"].std() es NaN.
+    # Corrección rápida para inferencia:
+    mean_amount = 245_000
+    std_amount  = 320_000
+    df["amount_zscore"] = round((amount - mean_amount) / std_amount, 4)
 
+    return df[FEATURE_COLUMNS]
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Persistencia en BD
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _save_to_db(data: dict, risk_score: float, risk_level: str, recommendation: str):
+    """Guarda la transacción y la alerta generada en la base de datos."""
+    try:
+        init_db()
+        with get_connection() as conn:
+            # 1. Insertar transacción
+            cur = conn.execute("""
+                INSERT INTO transactions 
+                (amount, country, hour, device_type, failed_attempts, is_foreign, high_risk_merchant)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                data.get("amount"), data.get("country"), data.get("hour"), 
+                data.get("device_type"), data.get("failed_attempts"), 
+                data.get("is_foreign"), data.get("high_risk_merchant")
+            ))
+            tx_id = cur.lastrowid
+            
+            # 2. Insertar alerta
+            conn.execute("""
+                INSERT INTO fraud_alerts 
+                (transaction_id, risk_score, risk_level, recommendation)
+                VALUES (?, ?, ?, ?)
+            """, (tx_id, risk_score, risk_level, recommendation))
+            
+            # 3. Insertar score histórico
+            conn.execute("""
+                INSERT INTO risk_scores 
+                (transaction_id, model_version, score)
+                VALUES (?, ?, ?)
+            """, (tx_id, "1.1.0-pipeline", risk_score))
+            
+    except Exception as e:
+        print(f"Error guardando en BD: {e}")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Predicción principal
@@ -113,22 +127,11 @@ def _preprocess_single(data: dict) -> pd.DataFrame:
 def predict_transaction(data: dict) -> dict:
     """
     Evalúa una transacción y retorna el resultado de riesgo.
-
-    Args:
-        data: dict con keys: amount, country, hour, device_type,
-              failed_attempts, is_foreign, high_risk_merchant
-
-    Returns:
-        {
-            "risk_score":     float (0–1),
-            "is_fraud":       bool,
-            "risk_level":     "BAJO" | "MEDIO" | "ALTO",
-            "recommendation": str,
-            "input":          dict (eco de la entrada)
-        }
     """
+    _load_artifacts()
+    
     X = _preprocess_single(data)
-    prob = float(_model.predict_proba(X)[0, 1])
+    prob = float(_pipeline.predict_proba(X)[0, 1])
 
     # Nivel de riesgo
     if prob < RISK_THRESHOLDS["bajo"]:
@@ -140,6 +143,8 @@ def predict_transaction(data: dict) -> dict:
     else:
         level = "ALTO"
         recommendation = "🚨 BLOQUEAR TRANSACCIÓN"
+        
+    _save_to_db(data, prob, level, recommendation)
 
     return {
         "risk_score":     round(prob, 4),

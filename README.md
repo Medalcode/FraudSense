@@ -54,13 +54,13 @@ Transacción → [API REST] → [Motor de Análisis] → [Modelo XGBoost] → Re
 | Área | Tecnología |
 |---|---|
 | Lenguaje | Python 3.10+ |
-| Machine Learning | XGBoost, Scikit-Learn |
+| Machine Learning | XGBoost, Scikit-Learn (Pipelines) |
 | Análisis de Datos | Pandas, NumPy |
 | Desbalance de Clases | imbalanced-learn (SMOTE) |
 | API REST | FastAPI + Uvicorn |
 | Dashboard | Streamlit + Plotly |
 | Visualización | Matplotlib, Seaborn |
-| Base de Datos | SQL (SQLite / PostgreSQL) |
+| Base de Datos | SQLite (Esquema relacional en producción) |
 | Control de Versiones | Git & GitHub |
 
 ---
@@ -83,14 +83,14 @@ FraudSense/
 │
 ├── src/
 │   ├── __init__.py
-│   ├── preprocessing.py        # Feature engineering + SMOTE
-│   ├── train_model.py          # Entrenamiento XGBoost + evaluación
-│   ├── predict.py              # Inferencia: BAJO / MEDIO / ALTO riesgo
-│   └── api.py                  # API REST (FastAPI)
+│   ├── db.py                   # Conexión SQLite y operaciones CRUD
+│   ├── preprocessing.py        # Feature engineering 
+│   ├── train_model.py          # Entrenamiento de Pipeline (Preprocesamiento + SMOTE + XGBoost)
+│   ├── predict.py              # Inferencia y guardado en Base de Datos
+│   └── api.py                  # API REST (FastAPI) conectada a SQLite
 │
 ├── models/                     # Generado por train_model.py
-│   ├── fraud_model.pkl
-│   ├── encoders.pkl
+│   ├── fraud_pipeline.pkl      # Modelo ML integrado con preprocesamiento y escalado
 │   └── evaluation.png          # Confusion Matrix + ROC Curve + Feature Importance
 │
 ├── dashboard/

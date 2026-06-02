@@ -60,23 +60,26 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Codificación de Variables Categóricas
+# Listas de Variables
 # ──────────────────────────────────────────────────────────────────────────────
 
-def encode_categoricals(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
-    """
-    Codifica variables categóricas con LabelEncoder.
-    Retorna el dataframe codificado y el diccionario de encoders.
-    """
-    df = df.copy()
-    encoders = {}
+NUMERICAL_COLUMNS = [
+    "amount",
+    "hour",
+    "failed_attempts",
+    "is_foreign",
+    "high_risk_merchant",
+    "is_night",
+    "high_amount",
+    "amount_zscore",
+    "is_risk_country",
+    "risk_score_heuristic",
+]
 
-    for col in ["country", "device_type"]:
-        le = LabelEncoder()
-        df[col] = le.fit_transform(df[col].astype(str))
-        encoders[col] = le
-
-    return df, encoders
+CATEGORICAL_COLUMNS = [
+    "country",
+    "device_type",
+]
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -101,13 +104,13 @@ FEATURE_COLUMNS = [
 
 def load_and_preprocess(
     data_path: str = DATA_FILE,
-    apply_smote: bool = True,
 ) -> tuple:
     """
-    Pipeline completo: carga → limpieza → encoding → features → split → (SMOTE).
+    Pipeline inicial: carga → limpieza → features → split.
+    (La codificación y el balanceo SMOTE se delegan al pipeline de Scikit-Learn/Imblearn).
 
     Returns:
-        X_train, X_test, y_train, y_test, encoders
+        X_train, X_test, y_train, y_test
     """
     print("📂 Cargando datos...")
     df = pd.read_csv(data_path, index_col="transaction_id")
@@ -123,10 +126,6 @@ def load_and_preprocess(
     print("🔧 Ingeniería de características...")
     df = engineer_features(df)
 
-    # Codificación
-    print("🔤 Codificando variables categóricas...")
-    df, encoders = encode_categoricals(df)
-
     # Separar features y target
     X = df[FEATURE_COLUMNS]
     y = df["is_fraud"]
@@ -141,18 +140,10 @@ def load_and_preprocess(
     )
 
     print(f"   Train: {len(X_train):,} muestras | Test: {len(X_test):,} muestras")
-
-    # SMOTE — balanceo de clases
-    if apply_smote:
-        print("⚖️  Aplicando SMOTE para balancear clases...")
-        smote = SMOTE(random_state=RANDOM_STATE, k_neighbors=5)
-        X_train, y_train = smote.fit_resample(X_train, y_train)
-        print(f"   Post-SMOTE train: {len(X_train):,} muestras")
-
-    print("✅ Preprocesamiento completado.\n")
-    return X_train, X_test, y_train, y_test, encoders
+    print("✅ Preprocesamiento inicial completado.\n")
+    return X_train, X_test, y_train, y_test
 
 
 if __name__ == "__main__":
-    X_train, X_test, y_train, y_test, encoders = load_and_preprocess()
+    X_train, X_test, y_train, y_test = load_and_preprocess()
     print(f"Features usadas ({len(FEATURE_COLUMNS)}): {FEATURE_COLUMNS}")

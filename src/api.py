@@ -97,37 +97,69 @@ def health_check():
     }
 
 
+from src.db import get_connection
+
 @app.get("/estadisticas", tags=["Analytics"])
 def get_statistics():
-    """Retorna estadísticas generales del dataset de transacciones."""
-    if not os.path.exists(DATA_FILE):
-        raise HTTPException(
-            status_code=404,
-            detail="Dataset no encontrado. Ejecuta: python data/generate_dataset.py",
-        )
+    """Retorna estadísticas generales de transacciones usando SQLite."""
+    try:
+        with get_connection() as conn:
+            # Stats generales
+            row = conn.execute("""
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN is_fraud=1 THEN 1 ELSE 0 END) as fraudes,
+                    SUM(CASE WHEN is_fraud=0 THEN 1 ELSE 0 END) as legitimas
+                FROM transactions
+            """).fetchone()
+            
+            total = row["total"] or 0
+            if total == 0:
+                 raise HTTPException(status_code=404, detail="No hay transacciones.")
+            
+            fraudes = row["fraudes"] or 0
+            legitimas = row["legitimas"] or 0
+            tasa = (fraudes / total * 100) if total > 0 else 0
+            
+            # Montos
+            avg_row = conn.execute("""
+                SELECT 
+                    AVG(CASE WHEN is_fraud=1 THEN amount END) as avg_fraud,
+                    AVG(CASE WHEN is_fraud=0 THEN amount END) as avg_legit
+                FROM transactions
+            """).fetchone()
+            
+            # Top paises (usando la vista)
+            top_countries = conn.execute("""
+                SELECT country, fraud_count FROM fraud_by_country LIMIT 5
+            """).fetchall()
+            top_paises_dict = {r["country"]: r["fraud_count"] for r in top_countries}
+            
+            # Hora pico y Dispositivo
+            hora_pico = conn.execute("""
+                SELECT hour FROM transactions WHERE is_fraud=1 GROUP BY hour ORDER BY COUNT(*) DESC LIMIT 1
+            """).fetchone()
+            
+            disp_pico = conn.execute("""
+                SELECT device_type FROM transactions WHERE is_fraud=1 GROUP BY device_type ORDER BY COUNT(*) DESC LIMIT 1
+            """).fetchone()
 
-    df = pd.read_csv(DATA_FILE, index_col="transaction_id")
-
-    fraud_df = df[df["is_fraud"] == 1]
-    legit_df = df[df["is_fraud"] == 0]
-
-    top_fraud_countries = (
-        fraud_df["country"].value_counts().head(5).to_dict()
-    )
-
-    return {
-        "total_transacciones": int(len(df)),
-        "total_fraudes":        int(df["is_fraud"].sum()),
-        "total_legitimas":      int(legit_df.shape[0]),
-        "tasa_fraude_pct":      round(df["is_fraud"].mean() * 100, 2),
-        "monto_promedio": {
-            "legitimas":     round(float(legit_df["amount"].mean()), 0),
-            "fraudulentas":  round(float(fraud_df["amount"].mean()), 0),
-        },
-        "top_paises_fraude": top_fraud_countries,
-        "hora_pico_fraude":  int(fraud_df["hour"].mode()[0]),
-        "dispositivo_mas_fraudulento": str(fraud_df["device_type"].mode()[0]),
-    }
+        return {
+            "total_transacciones": total,
+            "total_fraudes":        fraudes,
+            "total_legitimas":      legitimas,
+            "tasa_fraude_pct":      round(tasa, 2),
+            "monto_promedio": {
+                "legitimas":     round(avg_row["avg_legit"] or 0, 0),
+                "fraudulentas":  round(avg_row["avg_fraud"] or 0, 0),
+            },
+            "top_paises_fraude": top_paises_dict,
+            "hora_pico_fraude":  hora_pico["hour"] if hora_pico else None,
+            "dispositivo_mas_fraudulento": disp_pico["device_type"] if disp_pico else None,
+        }
+    except Exception as e:
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/evaluar_transaccion",

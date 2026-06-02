@@ -15,8 +15,10 @@ MODELS_DIR  = os.path.join(BASE_DIR, "models")
 DATABASE_DIR = os.path.join(BASE_DIR, "database")
 
 DATA_FILE    = os.path.join(DATA_DIR, "transactions.csv")
-MODEL_FILE   = os.path.join(MODELS_DIR, "fraud_model.pkl")
-ENCODERS_FILE = os.path.join(MODELS_DIR, "encoders.pkl")
+DB_FILE      = os.path.join(DATABASE_DIR, "fraudsense.db")
+SCHEMA_FILE  = os.path.join(DATABASE_DIR, "schema.sql")
+
+PIPELINE_FILE = os.path.join(MODELS_DIR, "fraud_pipeline.pkl")
 
 # ──────────────────────────────────────────────
 # Dataset

@@ -73,12 +73,17 @@ st.markdown("""
 # Carga de datos
 # ──────────────────────────────────────────────────────────────────────────────
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def load_data():
-    if not os.path.exists(DATA_FILE):
+    from src.db import get_connection
+    try:
+        with get_connection() as conn:
+            df = pd.read_sql("SELECT * FROM transactions", conn, index_col="id")
+            df.index.name = "transaction_id"
+            return df
+    except Exception as e:
+        st.error(f"Error conectando a BD: {e}")
         return None
-    df = pd.read_csv(DATA_FILE, index_col="transaction_id")
-    return df
 
 
 # ──────────────────────────────────────────────────────────────────────────────
