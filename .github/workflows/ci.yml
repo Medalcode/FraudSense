@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+      - run: pip install -r requirements.txt
+      - name: Verify imports
+        run: |
+          python -c "
+from src.preprocessing import load_and_preprocess, FEATURE_COLUMNS
+from src.predict import FraudPredictor
+from src.train_model import train_model
+from src.api import app
+from dashboard.app import app as dash_app
+print('All imports OK')
+"
