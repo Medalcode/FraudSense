@@ -9,7 +9,7 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)
 ![Status](https://img.shields.io/badge/Estado-En%20Desarrollo-brightgreen?style=for-the-badge)
 
-**Sistema Inteligente de Detección de Fraude en Transacciones Digitales usando Machine Learning**
+**Plataforma Inteligente de Evaluación de Riesgo Transaccional**
 
 *Proyecto de Título — Ingeniería en Informática*
 
@@ -19,9 +19,12 @@
 
 ## 🎯 ¿Qué es FraudSense?
 
-FraudSense es una plataforma completa de análisis financiero que utiliza **Machine Learning (XGBoost)** para detectar transacciones sospechosas en sistemas de pago digitales en tiempo real.
+FraudSense no es solo un modelo de clasificación, es un sistema integral de prevención de fraude financiero diseñado con los estándares de la industria. Integra **Machine Learning (XGBoost)**, **Ingeniería de Datos**, **Explainable AI (SHAP)** y un panel de control interactivo para analistas de riesgo.
 
-Similar a los sistemas usados por **PayPal, Stripe, Visa y bancos tradicionales**, FraudSense analiza el comportamiento de cada transacción y predice si es fraudulenta o legítima.
+## ✨ Características Principales
+- **Detección Avanzada:** Modelo XGBoost entrenado con técnicas para manejar el desbalance severo (SMOTE).
+- **Explainable AI (XAI):** Módulo basado en SHAP que no solo entrega un *risk score*, sino los *Red Flags* exactos que justifican la decisión (ej: "Monto anormalmente alto", "Horario inusual").
+- **Pipeline Integral:** Feature engineering robusto con escalado y encoding encapsulado en `imblearn.pipeline`.
 
 ---
 
@@ -110,41 +113,58 @@ FraudSense/
 ## 🚀 Instalación y Uso
 
 ### 1. Clonar el repositorio
-
 ```bash
 git clone https://github.com/Medalcode/FraudSense.git
 cd FraudSense
 ```
 
-### 2. Instalar dependencias
+### 🐋 Despliegue Rápido (Docker)
+La forma más fácil de ejecutar FraudSense en producción es a través de Docker Compose, el cual levanta simultáneamente el API y el Dashboard en contenedores separados, compartiendo la base de datos a través de un volumen persistente.
 
+```bash
+# Construir y levantar los contenedores
+docker-compose up --build -d
+
+# Ver los logs
+docker-compose logs -f
+```
+Una vez levantado:
+- **Dashboard:** http://localhost:8501
+- **API Swagger:** http://localhost:8000/docs
+
+---
+
+### 💻 Ejecución Local (Desarrollo)
+Si prefieres no usar Docker, puedes correrlo localmente:
+
+1. Instalar dependencias:
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Generar el dataset
-
+2. Generar datos y modelo (la primera vez):
 ```bash
 python data/generate_dataset.py
-```
-
-### 4. Entrenar el modelo
-
-```bash
 python src/train_model.py
 ```
 
-### 5. Iniciar la API
-
+3. Levantar API (Terminal 1):
 ```bash
-uvicorn src.api:app --reload
-# Documentación → http://localhost:8000/docs
+uvicorn src.api:app --reload --port 8000
 ```
 
-### 6. Abrir el Dashboard
-
+4. Levantar Dashboard (Terminal 2):
 ```bash
 streamlit run dashboard/app.py
+```
+
+---
+
+### 🧪 Pruebas Unitarias
+El proyecto cuenta con pruebas unitarias usando `pytest` para garantizar la estabilidad del motor de inferencia y del API.
+
+```bash
+pytest tests/
 ```
 
 ---
@@ -154,8 +174,9 @@ streamlit run dashboard/app.py
 ### Evaluar una transacción
 
 ```http
-POST /evaluar_transaccion
+POST /predict
 Content-Type: application/json
+X-API-Key: fs_live_...
 
 {
   "amount": 950000,
@@ -172,14 +193,23 @@ Content-Type: application/json
 
 ```json
 {
-  "risk_score": 0.94,
+  "risk_score": 0.9854,
   "is_fraud": true,
   "risk_level": "ALTO",
   "recommendation": "🚨 BLOQUEAR TRANSACCIÓN",
-  "details": {
+  "reasons": [
+    "🚩 Horario nocturno incrementa significativamente el riesgo.",
+    "🚩 Intentos fallidos previos incrementa significativamente el riesgo.",
+    "🚩 Monto anormalmente alto incrementa significativamente el riesgo."
+  ],
+  "input": {
     "amount": 950000,
     "country": "RU",
-    "hour": 3
+    "hour": 3,
+    "device_type": "Android",
+    "failed_attempts": 5,
+    "is_foreign": 1,
+    "high_risk_merchant": 1
   }
 }
 ```

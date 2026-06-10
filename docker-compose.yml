@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8000:8000"
+    volumes:
+      - fraud_db_data:/app/database
+    environment:
+      - PYTHONPATH=/app
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    ports:
+      - "8501:8501"
+    volumes:
+      - fraud_db_data:/app/database
+    environment:
+      - PYTHONPATH=/app
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  fraud_db_data:

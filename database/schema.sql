@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS fraud_alerts (
     risk_score      DECIMAL(5, 4)   NOT NULL,           -- Probabilidad de fraude (0–1)
     risk_level      VARCHAR(10)     NOT NULL,           -- BAJO / MEDIO / ALTO
     recommendation  VARCHAR(100)    NOT NULL,           -- Acción recomendada
+    reasons         TEXT,                               -- JSON con motivos de la alerta (Explicabilidad SHAP)
     reviewed_by     VARCHAR(100),                       -- Analista que revisó (si aplica)
     reviewed_at     TIMESTAMP,                          -- Fecha de revisión
     final_verdict   VARCHAR(20),                        -- FRAUDE / LEGÍTIMA / PENDIENTE

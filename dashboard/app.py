@@ -394,6 +394,7 @@ elif page == "🚨 Evaluador en Tiempo Real":
                 score = result["risk_score"]
                 level = result["risk_level"]
                 rec   = result["recommendation"]
+                reasons = result.get("reasons", [])
 
                 css_class = {"ALTO": "alert-alto", "MEDIO": "alert-medio", "BAJO": "alert-bajo"}[level]
                 icon = {"ALTO": "🚨", "MEDIO": "⚠️", "BAJO": "✅"}[level]
@@ -428,6 +429,11 @@ elif page == "🚨 Evaluador en Tiempo Real":
                     font_color="white",
                 )
                 st.plotly_chart(fig_gauge, use_container_width=True)
+
+                if reasons:
+                    st.markdown("#### 🔍 Explainable AI (SHAP)")
+                    for r in reasons:
+                        st.markdown(f"- {r}")
 
             else:
                 # Evaluación heurística sin modelo

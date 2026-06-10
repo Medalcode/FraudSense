@@ -25,6 +25,13 @@ def init_db():
     with get_connection() as conn:
         with open(SCHEMA_FILE, "r") as f:
             conn.executescript(f.read())
+        
+        # Migración: Añadir columna reasons a fraud_alerts si no existe
+        try:
+            conn.execute("ALTER TABLE fraud_alerts ADD COLUMN reasons TEXT;")
+        except sqlite3.OperationalError:
+            pass # La columna ya existe
+
         conn.commit()
 
 if __name__ == "__main__":

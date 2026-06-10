@@ -15,11 +15,20 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Security
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
-from config import DATA_FILE, API_TITLE, API_VERSION, DEVICE_TYPES
+from config import (
+    API_KEY,
+    API_KEY_ENV,
+    API_KEY_HEADER,
+    API_TITLE,
+    API_VERSION,
+    DATA_FILE,
+    DEVICE_TYPES
+)
 from src.predict import predict_transaction
 
 
@@ -41,6 +50,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+api_key_header = APIKeyHeader(name=API_KEY_HEADER, auto_error=False)
+
+
+def verify_api_key(api_key: str = Security(api_key_header)) -> str:
+    if not API_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Configuración requerida: define {API_KEY_ENV} para habilitar la API.",
+        )
+    if api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="API key inválida o ausente.")
+    return api_key
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -75,6 +97,7 @@ class FraudPredictionResponse(BaseModel):
     is_fraud:       bool
     risk_level:     str
     recommendation: str
+    reasons:        list[str]
     input:          dict
 
 
@@ -99,7 +122,7 @@ def health_check():
 
 from src.db import get_connection
 
-@app.get("/estadisticas", tags=["Analytics"])
+@app.get("/estadisticas", tags=["Analytics"], dependencies=[Depends(verify_api_key)])
 def get_statistics():
     """Retorna estadísticas generales de transacciones usando SQLite."""
     try:
@@ -164,7 +187,8 @@ def get_statistics():
 
 @app.post("/evaluar_transaccion",
           response_model=FraudPredictionResponse,
-          tags=["Predicción"])
+          tags=["Predicción"],
+          dependencies=[Depends(verify_api_key)])
 def evaluate_transaction(transaction: TransactionInput):
     """
     Evalúa una transacción y retorna el nivel de riesgo de fraude.

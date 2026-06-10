@@ -59,6 +59,10 @@ API_PORT = 8000
 API_TITLE = "FraudSense API"
 API_VERSION = "1.0.0"
 
+API_KEY_ENV = "FRAUDSENSE_API_KEY"
+API_KEY_HEADER = "X-API-Key"
+API_KEY = os.getenv(API_KEY_ENV, "dev-api-key-12345")
+
 # ──────────────────────────────────────────────
 # Negocio
 # ──────────────────────────────────────────────
